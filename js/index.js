@@ -23,6 +23,7 @@ const main = async () => {
   // for Instruction 1
 
   const authorizedBuffer = new Keypair();
+  const authority = 
 
   console.log("Requesting Airdrop of 1 SOL...");
   await connection.requestAirdrop(feePayer.publicKey, 2e9);
@@ -38,6 +39,8 @@ const main = async () => {
     /** Public key of the program to assign as the owner of the created account */
     programId: programId,
   });
+
+  PublicKey.findProgramAddress()
 
   const idx = Buffer.from(new Uint8Array([1]));
   const messageLen = Buffer.from(
@@ -59,8 +62,9 @@ const main = async () => {
 
   let authorizeBufferIx = new TransactionInstruction({
     keys: [
-      { pubkey: echoBuffer.publicKey, isSigner: false,isWritable: true, },
-      { pubkey: , i}
+      { pubkey: authorizedBuffer.publicKey, isSigner: false, isWritable: true, },
+      { pubkey: , isSigner: true, isWriteable: false},
+      web3.SystemProgram
     ],
     programId: programId,
     data: Buffer.concat([idx, messageLen, message]),
