@@ -98,23 +98,19 @@ impl Processor {
                         authed_buffer.key, 
                         &auth_key, 
                         Rent::get()?.minimum_balance(buffer_size),
-                        buffer_size.try_into().unwrap(), 
-                        program_id), 
+                        buffer_size.try_into().unwrap(),
+                        program_id),
                     &[authed_buffer.clone(), authority.clone(), system_program.clone()],
-                    &[&[auth_key.as_ref(), &[bump_seed]]],
+                    &[&[b"authority",
+                    authority.key.as_ref(),
+                    &buffer_seed.to_le_bytes(), &[bump_seed]]],
                 )?;
 
-
-
                 let buffer = &mut authed_buffer.try_borrow_mut_data()?;
-            
-                for i in 0..buffer.len() {
-                    if i == 0 {
-                        buffer[i] = bump_seed;
-                    } else {
-                        buffer[i] = buffer_seed.try_into().unwrap();
-                    }
-                }
+                
+                buffer[0] = bump_seed;
+                buffer[1..9].clone_from_slice(&buffer_seed.to_le_bytes());
+
                 Ok(())
             }
             EchoInstruction::AuthorizedEcho { data: _ } => {
