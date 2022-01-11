@@ -20,6 +20,10 @@ const main = async () => {
   const feePayer = new Keypair();
   const echoBuffer = new Keypair();
 
+  // for Instruction 1
+
+  const authorizedBuffer = new Keypair();
+
   console.log("Requesting Airdrop of 1 SOL...");
   await connection.requestAirdrop(feePayer.publicKey, 2e9);
   console.log("Airdrop received");
@@ -35,7 +39,7 @@ const main = async () => {
     programId: programId,
   });
 
-  const idx = Buffer.from(new Uint8Array([0]));
+  const idx = Buffer.from(new Uint8Array([1]));
   const messageLen = Buffer.from(
     new Uint8Array(new BN(echo.length).toArray("le", 4))
   );
@@ -48,6 +52,15 @@ const main = async () => {
         isSigner: false,
         isWritable: true,
       },
+    ],
+    programId: programId,
+    data: Buffer.concat([idx, messageLen, message]),
+  });
+
+  let authorizeBufferIx = new TransactionInstruction({
+    keys: [
+      { pubkey: echoBuffer.publicKey, isSigner: false,isWritable: true, },
+      { pubkey: , i}
     ],
     programId: programId,
     data: Buffer.concat([idx, messageLen, message]),
