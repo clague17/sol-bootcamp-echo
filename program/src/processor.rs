@@ -42,7 +42,15 @@ impl Processor {
             EchoInstruction::Echo { data } => {
                 msg!("Instruction: Echo");
                 let echo_ai = next_account_info(accounts_iter)?; // ai is for accountInfo
+                
+                assert_with_msg(
+                    echo_ai.is_writable && echo_ai.data_len() != 0,
+                    ProgramError::InvalidArgument,
+                    "The Passed in echo buffer was not initialized properly.",
+                )?;
 
+                let min_len = cmp::min(data.len(), echo_ai.data_len());
+                
                 let buffer = &mut echo_ai.try_borrow_mut_data()?; 
 
                 for byte in buffer.iter() {
@@ -50,8 +58,6 @@ impl Processor {
                         return Err(EchoError::EchoBufferNotEmpty.into());
                     }
                 }
-
-                let min_len = cmp::min(data.len(), echo_ai.data_len());
 
                 for i in 0..min_len {
                     buffer[i] = data[i];
@@ -66,7 +72,7 @@ impl Processor {
             } => {
                 msg!("Instruction: InitializeAuthorizedEcho");
 
-                let authed_buffer = next_account_info(accounts_iter)?; // ai is for accountInfo
+                let pda_buffer = next_account_info(accounts_iter)?; // ai is for accountInfo
                 let authority = next_account_info(accounts_iter)?;
                 let system_program = next_account_info(accounts_iter)?;
 
@@ -79,45 +85,93 @@ impl Processor {
                 
                 let (auth_key, bump_seed) = Pubkey::find_program_address(
                     &[
-                        b"authority",
                         authority.key.as_ref(),
                         &buffer_seed.to_le_bytes()
                 ],
                     program_id,
                 );
 
-                // error check
                 assert_with_msg(
-                    auth_key == *authority.key,
+                    auth_key == *pda_buffer.key,
                     ProgramError::InvalidArgument,
                     "Invalid PDA seeds for authority, malicious activity suspected :O",
                 )?;
 
                 invoke_signed(
                     &system_instruction::create_account(
-                        authed_buffer.key, 
-                        &auth_key, 
+                        authority.key, 
+                        pda_buffer.key, 
                         Rent::get()?.minimum_balance(buffer_size),
                         buffer_size.try_into().unwrap(),
                         program_id),
-                    &[authed_buffer.clone(), authority.clone(), system_program.clone()],
-                    &[&[b"authority",
+                    &[authority.clone(), pda_buffer.clone(), system_program.clone()],
+                    &[&[
                     authority.key.as_ref(),
                     &buffer_seed.to_le_bytes(), &[bump_seed]]],
                 )?;
 
-                let buffer = &mut authed_buffer.try_borrow_mut_data()?;
+                let buffer = &mut pda_buffer.try_borrow_mut_data()?;
                 
                 buffer[0] = bump_seed;
                 buffer[1..9].clone_from_slice(&buffer_seed.to_le_bytes());
-
+                
+                assert_with_msg(
+                    buffer[0] == bump_seed && buffer[1..9] == buffer_seed.to_le_bytes(),
+                    ProgramError::InvalidArgument,
+                    "The buffer was not correctly initialized",
+                )?;
+                
                 Ok(())
             }
-            EchoInstruction::AuthorizedEcho { data: _ } => {
+            EchoInstruction::AuthorizedEcho { data } => {
                 msg!("Instruction: AuthorizedEcho");
 
-                // Here is where we'll use invokeSigned()
-                Err(EchoError::NotImplemented.into())
+                let pda_buffer = next_account_info(accounts_iter)?; // ai is for accountInfo
+                let authority = next_account_info(accounts_iter)?;
+
+                assert_with_msg(
+                    authority.is_signer,
+                    ProgramError::InvalidArgument,
+                    "The authority was not a signer",
+                )?;
+
+                msg!("Going for the first borrow");
+
+                let buffer = &mut pda_buffer.try_borrow_mut_data()?;
+
+                msg!("Here is the second borrow");
+
+                let (_auth_key, bump_seed) = Pubkey::find_program_address(
+                    &[
+                        authority.key.as_ref(),
+                        buffer[1..9].as_ref()// Should be buffer key
+                ],
+                    program_id,
+                );
+
+                assert_with_msg(
+                    buffer.len() > 0,
+                    ProgramError::InvalidArgument,
+                    "The buffer pda was not adequately initialized",
+                )?; 
+
+                assert_with_msg(
+                    bump_seed == buffer[0],
+                    ProgramError::InvalidArgument,
+                    "The passed account was not a real authority",
+                )?;
+                
+                // If we get here, then sure we can write
+
+
+                let min_len = cmp::min(data.len(), buffer.len() - 9);
+                
+
+                for i in 9..min_len {
+                    buffer[i] = data[i - 9];
+                }
+
+                Ok(())
             }
             EchoInstruction::InitializeVendingMachineEcho {
                 price: _,
