@@ -21,6 +21,7 @@ const main = async () => {
   const feePayer = new Keypair();
   const echoBuffer = new Keypair();
 
+  console.log("The EchoBuffer Key: ", echoBuffer.publicKey.toBase58());
   // for Instruction 1
 
   console.log("Requesting Airdrop of 1 SOL...");
@@ -28,6 +29,7 @@ const main = async () => {
   await connection.confirmTransaction(placeholder);
   console.log("Airdrop received");
 
+  console.log();
   let createIx = SystemProgram.createAccount({
     fromPubkey: feePayer.publicKey,
     newAccountPubkey: echoBuffer.publicKey,
@@ -39,7 +41,7 @@ const main = async () => {
     programId: programId,
   });
 
-  const idx1 = Buffer.from(new Uint8Array([1]));
+  const idx1 = Buffer.from(new Uint8Array([0]));
   const messageLen = Buffer.from(
     new Uint8Array(new BN(echo.length).toArray("le", 4))
   );
@@ -67,14 +69,14 @@ const main = async () => {
     new Uint8Array(new BN(buffSeed).toArray("le", 8))
   );
 
-  let [auth_key, bump_seed] = await PublicKey.findProgramAddress(
+  let [buffer_seed, bump_seed] = await PublicKey.findProgramAddress(
     [feePayer.publicKey.toBuffer(), authBuffSeed],
     programId
   );
 
   let initializeBufferIx = new TransactionInstruction({
     keys: [
-      { pubkey: auth_key, isSigner: false, isWritable: true },
+      { pubkey: buffer_seed, isSigner: false, isWritable: true },
       { pubkey: feePayer.publicKey, isSigner: true, isWriteable: false }, // The authority here can be anyone! in this case I'm just initializing it to feePayer.
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
     ],
@@ -88,7 +90,7 @@ const main = async () => {
   let authEchoIx = new TransactionInstruction({
     keys: [
       {
-        pubkey: auth_key,
+        pubkey: buffer_seed,
         isSigner: false,
         isWritable: true,
       },
@@ -99,17 +101,22 @@ const main = async () => {
   });
 
   let tx = new Transaction();
-  tx.add(initializeBufferIx).add(authEchoIx);
+  tx.add(createIx).add(echoIx);
 
-  let txid = await sendAndConfirmTransaction(connection, tx, [feePayer], {
-    skipPreflight: true,
-    preflightCommitment: "confirmed",
-    confirmation: "confirmed",
-    commitment: "confirmed",
-  });
+  let txid = await sendAndConfirmTransaction(
+    connection,
+    tx,
+    [feePayer, echoBuffer],
+    {
+      skipPreflight: true,
+      preflightCommitment: "confirmed",
+      commitment: "confirmed",
+    }
+  );
   console.log(`https://explorer.solana.com/tx/${txid}?cluster=devnet`);
 
-  data = (await connection.getAccountInfo(auth_key, "confirmed")).data;
+  data = (await connection.getAccountInfo(echoBuffer.publicKey, "confirmed"))
+    .data;
   console.log("Echo Buffer Text:", data.toString());
 
   ////////////////////////////////////////////////////////////////////////////////
